@@ -1,17 +1,19 @@
-#include <stdarg.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <argp.h>
-#include <sys/time.h>
-#include <string.h>
-#include <time.h>
 #include <gsl/gsl_statistics.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
-/* TBD: get from config.h */
-const char *argp_program_version = "facts 0.1";
-const char *argp_program_bug_address = "<more.andres@gmail.com>";
 
-static char doc[] = "facts -- generate performance reports";
+#include "config.h"
+
+const char *argp_program_version = PACKAGE_STRING;
+const char *argp_program_bug_address = PACKAGE_BUGREPORT;
+
+static char doc[] = PACKAGE_NAME " - performance report generator";
 static char args_doc[] = "PROGRAM FIRST INC LAST";
 
 static struct argp_option options[] = {};
@@ -23,7 +25,7 @@ struct args
 	char *args[ARGS];
 };
 
-static error_t parse_opt (int key, char *arg, struct argp_state *state)
+static error_t parse_opt(int key, char *arg, struct argp_state *state)
 {
 	struct args *args = state->input;
 
@@ -132,6 +134,9 @@ double sys(char *fmt, ...)
 
 	double start = wtime();
 
+	print(buffer);
+	printf("\n");
+
 	int ret = system(buffer);
 	if (ret)
 		ret = ret;
@@ -150,7 +155,7 @@ int main(int argc, char **argv)
 	start = wtime();
 	memset(items, '\n', sizeof(struct item) * ITEMS);
 
-	print("%s", date());
+	print("Starting at %s", date());
 	print("Timestamp %s\n", stamp);
 
 	print("Running system benchmark...\n");
@@ -162,18 +167,23 @@ int main(int argc, char **argv)
 	print("RANGE = [ %s, %s, %s ]\n",
 	      args.args[1], args.args[2], args.args[3]);
 
-	sys("mkdir %s", stamp);
+	sys("make --silent --no-print-directory clean; make --silent --no-print-directory");
 
-#define ITERS 4
+	char dir[128];
+	sprintf(dir, ".%s/%s", PACKAGE_NAME, stamp);
+
+	sys("mkdir --parents %s", dir);
+
+#define ITERS 8
 
 	double data[ITERS];
 
 	int i;
 	for (i = 0; i < ITERS; i++) {
-		double t = sys("%s 2>&1 > %s/%s-%02d.log",
-			       program, stamp, stamp, i);
+		double t = sys("./%s 2>&1 > .%s/%s/%s-%02d.log",
+			       program, PACKAGE_NAME, stamp, stamp, i);
 		data[i] = t;
-		print("iter %02d %f\n", i, t);
+		print("Run %02d took %f secs\n", i, t);
 	}
 
 	double mean, variance, largest, smallest;
@@ -183,10 +193,10 @@ int main(int argc, char **argv)
 	largest  = gsl_stats_max(data, 1, 5);
 	smallest = gsl_stats_min(data, 1, 5);
 
-	print("The sample mean is %g\n", mean);
-	print("The estimated variance is %g\n", variance);
-	print("The largest value is %g\n", largest);
-	print("The smallest value is %g\n", smallest);
+	print("The sample mean is %f secs\n", mean);
+	print("The estimated variance is %f\n", variance);
+	print("The largest value is %f secs\n", largest);
+	print("The smallest value is %f secs\n", smallest);
 	
 	int first, last, increment;
 
@@ -194,31 +204,40 @@ int main(int argc, char **argv)
 	last = atoi(args.args[2]);
 	increment = atoi(args.args[3]);
 
+	double size[32];
+	int l = 0;
+
 	int j;
 	for (j = first; j < last; j += increment) {
-		double t = sys("%s %d 2>&1 > %s/%s-size-%02d.log",
-			       program, j, stamp, stamp, j);
-		print("size %02d %f\n", j, t);
+		double t = sys("%s %d 2>&1 > .%s/%s/%s-size-%02d.log",
+			       program, j, PACKAGE_NAME, stamp, stamp, j);
+		size[l++] = t;
+		print("Using size %02d took %f secs\n", j, t);
 	}
 
 	long cores = sysconf(_SC_NPROCESSORS_ONLN);
 
-	print("cores %ld\n", cores);
+	print("Detected %ld cores\n", cores);
 
 	int k;
 	for (k = 1; k <= cores; k++) {
-		double t = sys("OMP_NUM_THREADS=%d %s %d 2>&1 > %s/%s-cores-%02d.log",
-			       k, program, first, stamp, stamp, j);
-		print("cores %02d %f\n", k, t);
+		double t = sys("OMP_NUM_THREADS=%d %s %d 2>&1 > .%s/%s/%s-cores-%02d.log",
+			       k, program, first, PACKAGE_NAME, stamp, stamp, j);
+		print("Using %02d cores took %f secs\n",
+		      k, t);
 	}
 
-	print("serial: x%\n");
-	print("parallel: x%\n");
+	print("Serial fraction: x%\n");
+	print("Parallel fraction: x%\n");
 
-	print("amdalah: x%\n");
-	print("gustafson: x%\n");
+	print("Ideal Speedup Amdalah is x%\n");
+	print("Ideal Speedup Gustafson is x%\n");
 
-	print("%s", date());
+	print("Generating result histogram\n");
+	print("Generating scaling charts\n");
+	print("Generating speedup charts\n");
+
+	print("Ending at %s", date());
 
 	exit (0);
 }
