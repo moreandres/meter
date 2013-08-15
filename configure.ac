@@ -14,6 +14,8 @@ AC_CHECK_LIB([gsl], [gsl_blas_dgemm])
 AC_CHECK_HEADERS([stdlib.h])
 AC_CHECK_HEADERS([sys/time.h])
 
+AC_FUNC_MALLOC
+
 AC_CHECK_FUNCS([gettimeofday])
 AC_CHECK_FUNCS([memset])
 AC_CHECK_FUNCS([strncasecmp])

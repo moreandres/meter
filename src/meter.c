@@ -16,12 +16,11 @@ const char *argp_program_bug_address = PACKAGE_BUGREPORT;
 static char doc[] = PACKAGE_NAME " - performance report generator";
 static char args_doc[] = "PROGRAM FIRST INC LAST";
 
-static struct argp_option options[] = {};
+static struct argp_option options[] = { };
 
 #define ARGS 4
 
-struct args
-{
+struct args {
 	char *args[ARGS];
 };
 
@@ -46,26 +45,28 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
 }
 
 static struct argp argp =
-  { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
+    { options, parse_opt, args_doc, doc, NULL, NULL, NULL };
 
+// "program.component.key" => value
 struct item {
-  char *key;
-  char *value;
+	char *key;
+	char *value;
 };
+
 #define ITEMS 32
 struct item items[ITEMS];
 
 char *cfg(char *key)
 {
-  int i;
+	int i;
 
-  for (i = 0; i < ITEMS; i++) {
-	  if (!strncasecmp(key, items[i].key, strlen(key))) {
-		  return items[i].value;
-	  }
-  }
+	for (i = 0; i < ITEMS; i++) {
+		if (!strncasecmp(key, items[i].key, strlen(key))) {
+			return items[i].value;
+		}
+	}
 
-  return getenv(key);
+	return getenv(key);
 }
 
 #define RED "\e[31m"
@@ -79,7 +80,7 @@ char *stamp = NULL;
 char *date(void)
 {
 	time_t t = time(NULL);
-	return ctime(&t);	
+	return ctime(&t);
 }
 
 char *timestamp(void)
@@ -91,22 +92,21 @@ char *timestamp(void)
 
 	gettimeofday(&tv, NULL);
 	time = tv.tv_sec;
-	
-	strftime(buffer, 32, "%Y%m%d-%H%M%S",
-		 localtime(&time));
+
+	strftime(buffer, 32, "%Y%m%d-%H%M%S", localtime(&time));
 
 	return buffer;
 }
 
 double wtime(void)
 {
-        double sec;
-        struct timeval tv;
+	double sec;
+	struct timeval tv;
 
-        gettimeofday(&tv, NULL);
-        sec = tv.tv_sec + tv.tv_usec / 1000000.0;
+	gettimeofday(&tv, NULL);
+	sec = tv.tv_sec + tv.tv_usec / 1000000.0;
 
-        return sec;
+	return sec;
 }
 
 double start;
@@ -149,7 +149,7 @@ double sys(char *fmt, ...)
 int main(int argc, char **argv)
 {
 	struct args args;
-	argp_parse (&argp, argc, argv, 0, 0, &args);
+	argp_parse(&argp, argc, argv, 0, 0, &args);
 
 	stamp = timestamp();
 	start = wtime();
@@ -160,7 +160,28 @@ int main(int argc, char **argv)
 
 	print("Running system benchmark...\n");
 
-	// sys("mpirun -np4 `which hpcc`");
+	// /usr/share/doc/hpcc/examples/_hpccinf.txt
+	// "program.hpcc.output_file_name = HPL.out"
+	// "program.hpcc.ns = 8"
+	// "program.hpcc.number_of_nbs = 1"
+	// "program.hpcc.pmap_process_mapping = 0"
+
+	// sys("mpirun `which hpcc` -np %d", 4); // 4m28.456s
+	{
+#define ARRAY_SIZE(x) ( sizeof(x) / sizeof(*x) )
+
+	  char *benchmarks[] = { "StarDGEMM_Gflops",
+				 "PTRANS_GBs",
+				 "StarRandomAccess_GUPs",
+				 "StarSTREAM_Triad",
+				 "StarFFT_Gflops" };
+	  int size = ARRAY_SIZE(benchmarks);
+	  int i = 0;
+	  for (i = 0; i < size; i++) {
+	    sys("grep %s hpccoutf.txt | cut -f2 -d=",
+		benchmarks[i]);
+	  }
+	}
 
 	char *program = args.args[0];
 	print("PROGRAM = %s\n", program);
@@ -190,14 +211,14 @@ int main(int argc, char **argv)
 
 	mean = gsl_stats_mean(data, 1, 5);
 	variance = gsl_stats_variance(data, 1, 5);
-	largest  = gsl_stats_max(data, 1, 5);
+	largest = gsl_stats_max(data, 1, 5);
 	smallest = gsl_stats_min(data, 1, 5);
 
 	print("The sample mean is %f secs\n", mean);
 	print("The estimated variance is %f\n", variance);
 	print("The largest value is %f secs\n", largest);
 	print("The smallest value is %f secs\n", smallest);
-	
+
 	int first, last, increment;
 
 	first = atoi(args.args[1]);
@@ -221,10 +242,11 @@ int main(int argc, char **argv)
 
 	int k;
 	for (k = 1; k <= cores; k++) {
-		double t = sys("OMP_NUM_THREADS=%d %s %d 2>&1 > .%s/%s/%s-cores-%02d.log",
-			       k, program, first, PACKAGE_NAME, stamp, stamp, j);
-		print("Using %02d cores took %f secs\n",
-		      k, t);
+		double t =
+		    sys
+		    ("OMP_NUM_THREADS=%d %s %d 2>&1 > .%s/%s/%s-cores-%02d.log",
+		     k, program, first, PACKAGE_NAME, stamp, stamp, j);
+		print("Using %d cores took %f secs\n", k, t);
 	}
 
 	print("Serial fraction: x%\n");
@@ -239,5 +261,5 @@ int main(int argc, char **argv)
 
 	print("Ending at %s", date());
 
-	exit (0);
+	exit(0);
 }
